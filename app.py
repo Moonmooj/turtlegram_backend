@@ -1,3 +1,4 @@
+from cgitb import reset
 from datetime import datetime, timedelta
 from email import message
 from functools import wraps
@@ -136,9 +137,11 @@ def get_article():
 def get_article_detail(article_id):
     article = db.article.find_one({'_id': ObjectId(article_id)})
     comments = list(db.comment.find({'article': article_id}))
+    likes = list(db.like.find({'article': article_id}))
     if article:
         article['_id'] = str(article['_id'])
         article['comments'] = json.loads(dumps(comments))
+        article['likes_count'] = len(likes)
         return jsonify({"message": "success", 'article': article})
     else:
         return jsonify({"message": "fail"}), 404
@@ -203,6 +206,49 @@ def get_comment(article_id):
     comments = list(db.comment.find({'article': article_id}))
     json_comments = json.loads(dumps(comments))
     return jsonify({'message': 'success', 'comments': json_comments})
+
+
+@app.route("/article/<article_id>/like", methods=["POST"])
+@authorize
+def post_like(user, article_id):
+    print(user, article_id)
+    db_user = db.users.find_one({'_id': ObjectId(user.get('id'))})
+
+    now = datetime.now().strftime("%H:%M:%S")
+    doc = {
+        'article': article_id,
+        'user': user['id'],
+        'user_email': db_user['email'],
+        'time': now
+    }
+    print(doc)
+    db.like.insert_one(doc)
+
+    return jsonify({'message': 'success'})
+
+
+@app.route("/article/<article_id>/like", methods=["DELETE"])
+@authorize
+def delete_like(user, article_id):
+    print(user, article_id)
+
+    result = db.like.delete_one({'article': article_id, 'user': user['id']})
+    if result.deleted_count:
+        return jsonify({'message': 'success'})
+    else:
+        return jsonify({'message': 'fail'}), 400
+
+
+@app.route("/article/<article_id>/like", methods=["GET"])
+@authorize
+def get_like(user, article_id):
+    print(user, article_id)
+
+    result = db.like.find_one({'article': article_id, 'user': user['id']})
+    if result:
+        return jsonify({'message': 'success', 'liked': True})
+    else:
+        return jsonify({'message': 'fail', 'liked': False})
 
 
 if __name__ == '__main__':
